@@ -49,9 +49,16 @@ public final class Hash {
         HighwayHash h = calcHash(objectState);
         return h.finalize64();
     }
-    
+    /**
+     * 利用highway哈希算法 生成 128bit 的hash
+     *
+     * @param objectState
+     * @return
+     */
     public static long[] hash128(ByteBuf objectState) {
+        // highway 具体算法
         HighwayHash h = calcHash(objectState);
+        // 因为 long 类型只有 8个byte , 8*8 = 64bit ,因此用 size 为 2 的 long 数组组成一个 128bit 的哈希
         return h.finalize128();
     }
 

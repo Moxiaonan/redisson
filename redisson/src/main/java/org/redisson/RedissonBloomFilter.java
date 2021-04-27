@@ -87,8 +87,10 @@ public class RedissonBloomFilter<T> extends RedissonExpirable implements RBloomF
     }
     
     private long[] hash(Object object) {
+        // 将对象转为 ByteBuf
         ByteBuf state = encode(object);
         try {
+            // 获取 object 的 hash 值
             return Hash.hash128(state);
         } finally {
             state.release();
@@ -97,6 +99,7 @@ public class RedissonBloomFilter<T> extends RedissonExpirable implements RBloomF
 
     @Override
     public boolean add(T object) {
+        // 对象转为 hash
         long[] hashes = hash(object);
 
         while (true) {
@@ -104,25 +107,33 @@ public class RedissonBloomFilter<T> extends RedissonExpirable implements RBloomF
                 readConfig();
             }
 
+            // 获取 hash 函数个数
             int hashIterations = this.hashIterations;
+            // 获取 hash槽的 size
             long size = this.size;
 
+            // 计算这个 hash 值在Redis bitmap（String）的下标
             long[] indexes = hash(hashes[0], hashes[1], hashIterations, size);
 
             CommandBatchService executorService = new CommandBatchService(commandExecutor);
+            // 检查 config 信息
             addConfigCheck(hashIterations, size, executorService);
             RBitSetAsync bs = createBitSet(executorService);
+            // 循环上一步获得的下标 , 将 Redis bitmap（String）对应位置执行 SETBIT 指令
             for (int i = 0; i < indexes.length; i++) {
                 bs.setAsync(indexes[i]);
             }
             try {
                 List<Boolean> result = (List<Boolean>) executorService.execute().getResponses();
 
+                // 结果集合 , 结果集合中 , 第一个是检查config信息的结果 , 所以跳过 , 取下标为1开始的结果集
                 for (Boolean val : result.subList(1, result.size()-1)) {
+                    // SETBIT 指令会返回 原下标上的值 如果是 0(false) 表示 原位置上没有为1 直接返回true
                     if (!val) {
                         return true;
                     }
                 }
+                // 如果 SETBIT 指令返回的值都是1 则说明所有下标都已被设置为 1 返回false
                 return false;
             } catch (RedisException e) {
                 if (e.getMessage() == null || !e.getMessage().contains("Bloom filter config has been changed")) {
@@ -148,6 +159,7 @@ public class RedissonBloomFilter<T> extends RedissonExpirable implements RBloomF
 
     @Override
     public boolean contains(T object) {
+        // 对象转为 hash 值
         long[] hashes = hash(object);
 
         while (true) {
@@ -158,11 +170,14 @@ public class RedissonBloomFilter<T> extends RedissonExpirable implements RBloomF
             int hashIterations = this.hashIterations;
             long size = this.size;
 
+            // 计算这个 hash 值在Redis bitmap（String）的下标
             long[] indexes = hash(hashes[0], hashes[1], hashIterations, size);
 
             CommandBatchService executorService = new CommandBatchService(commandExecutor);
             addConfigCheck(hashIterations, size, executorService);
             RBitSetAsync bs = createBitSet(executorService);
+
+            // 循环上一步获得的下标 , 将 Redis bitmap（String）对应位置执行 GETBIT 操作
             for (int i = 0; i < indexes.length; i++) {
                 bs.getAsync(indexes[i]);
             }
