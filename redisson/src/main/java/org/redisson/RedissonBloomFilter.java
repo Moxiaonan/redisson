@@ -99,7 +99,7 @@ public class RedissonBloomFilter<T> extends RedissonExpirable implements RBloomF
 
     @Override
     public boolean add(T object) {
-        // 对象转为 hash
+        // 对象转为 hash 这里是 size == 2 的long数组
         long[] hashes = hash(object);
 
         while (true) {
@@ -146,14 +146,20 @@ public class RedissonBloomFilter<T> extends RedissonExpirable implements RBloomF
     private long[] hash(long hash1, long hash2, int iterations, long size) {
         long[] indexes = new long[iterations];
         long hash = hash1;
+        // 根据 iterations(hash函数的个数) 循环计算出 iterations(hash函数的个数) 个 bitmap 下标
         for (int i = 0; i < iterations; i++) {
+            // 这个 & 操作是取 hash 的绝对值
+            // 对 size 取余 计算 bitmap 范围内的下标
             indexes[i] = (hash & Long.MAX_VALUE) % size;
+            // 根据hash1 hash2累加生成一个新的hash值 用于下次计算
+            // 这里不采用大部分资料里说的 使用n个hash函数 而是直接用一个hash 生成了n个hash值
             if (i % 2 == 0) {
                 hash += hash2;
             } else {
                 hash += hash1;
             }
         }
+        // 返回 iterations(hash函数的个数) 个下标
         return indexes;
     }
 
@@ -266,6 +272,7 @@ public class RedissonBloomFilter<T> extends RedissonExpirable implements RBloomF
             throw new IllegalArgumentException("Bloom filter false probability can't be negative");
         }
 
+        // 计算 bitmap 长度
         size = optimalNumOfBits(expectedInsertions, falseProbability);
         if (size == 0) {
             throw new IllegalArgumentException("Bloom filter calculated size is " + size);
@@ -273,14 +280,17 @@ public class RedissonBloomFilter<T> extends RedissonExpirable implements RBloomF
         if (size > getMaxSize()) {
             throw new IllegalArgumentException("Bloom filter size can't be greater than " + getMaxSize() + ". But calculated size is " + size);
         }
+        // 计算 hash 函数个数
         hashIterations = optimalNumOfHashFunctions(expectedInsertions, size);
 
         CommandBatchService executorService = new CommandBatchService(commandExecutor);
+        // 先获取原有信息 , 如果有配置信息 , 则判断与当前参数是否匹配
         executorService.evalReadAsync(configName, codec, RedisCommands.EVAL_VOID,
                 "local size = redis.call('hget', KEYS[1], 'size');" +
                         "local hashIterations = redis.call('hget', KEYS[1], 'hashIterations');" +
                         "assert(size == false and hashIterations == false, 'Bloom filter config has been changed')",
                         Arrays.<Object>asList(configName), size, hashIterations);
+        // 初始化 {config} 信息 (即使上一步中信息不匹配 , 仍会将新的信息设置到 {config} 中)
         executorService.writeAsync(configName, StringCodec.INSTANCE,
                                                 new RedisCommand<Void>("HMSET", new VoidReplayConvertor()), configName,
                 "size", size, "hashIterations", hashIterations,
@@ -292,6 +302,7 @@ public class RedissonBloomFilter<T> extends RedissonExpirable implements RBloomF
                 throw e;
             }
             readConfig();
+            // 如果信息不匹配,则返回false,但仍会将新的信息设置到 {config} 中
             return false;
         }
 
