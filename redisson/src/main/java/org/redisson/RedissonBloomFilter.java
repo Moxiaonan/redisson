@@ -126,7 +126,7 @@ public class RedissonBloomFilter<T> extends RedissonExpirable implements RBloomF
             try {
                 List<Boolean> result = (List<Boolean>) executorService.execute().getResponses();
 
-                // 结果集合 , 结果集合中 , 第一个是检查config信息的结果 , 所以跳过 , 取下标为1开始的结果集
+                // 结果集合 , 结果集合中 , 第一个是 addConfigCheck() 的结果 , 所以跳过 , 取下标为1开始的结果集
                 for (Boolean val : result.subList(1, result.size()-1)) {
                     // SETBIT 指令会返回 原下标上的值 如果是 0(false) 表示 原位置上没有为1 直接返回true
                     if (!val) {
@@ -189,13 +189,14 @@ public class RedissonBloomFilter<T> extends RedissonExpirable implements RBloomF
             }
             try {
                 List<Boolean> result = (List<Boolean>) executorService.execute().getResponses();
-
+                // 结果集合 , 结果集合中 , 第一个是 addConfigCheck() 方法的结果 , 所以跳过 , 取下标为1开始的结果集
                 for (Boolean val : result.subList(1, result.size()-1)) {
+                    // 如果有一个下标取值为0 则直接返回 false
                     if (!val) {
                         return false;
                     }
                 }
-
+                // 所有下标返回 1 代码就能到这里 并返回true
                 return true;
             } catch (RedisException e) {
                 if (e.getMessage() == null || !e.getMessage().contains("Bloom filter config has been changed")) {
