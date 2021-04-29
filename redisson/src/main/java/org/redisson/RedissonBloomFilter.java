@@ -261,6 +261,7 @@ public class RedissonBloomFilter<T> extends RedissonExpirable implements RBloomF
     }
 
     protected long getMaxSize() {
+        // 最大值 Redis 字符串最大长度 512M = 2^32 bit =  Integer.MAX_VALUE * 2L
         return Integer.MAX_VALUE*2L;
     }
     
@@ -278,6 +279,7 @@ public class RedissonBloomFilter<T> extends RedissonExpirable implements RBloomF
         if (size == 0) {
             throw new IllegalArgumentException("Bloom filter calculated size is " + size);
         }
+        // 最大长度等于 Redis String 最大长度(512M)
         if (size > getMaxSize()) {
             throw new IllegalArgumentException("Bloom filter size can't be greater than " + getMaxSize() + ". But calculated size is " + size);
         }
